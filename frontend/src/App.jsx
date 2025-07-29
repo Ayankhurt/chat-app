@@ -3,8 +3,8 @@ import { GlobalContext } from './context/Context';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router';
 import Login from './components/login';
 import Signup from './components/signup';
-import UserList from './components/Userlist';
-import Chat from './components/chat';
+import UserList from './components/UserList';
+import Chat from './components/Chat';
 
 function App() {
     const { state, dispatch } = useContext(GlobalContext);

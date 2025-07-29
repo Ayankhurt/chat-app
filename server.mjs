@@ -1,132 +1,214 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
+import { customAlphabet } from 'nanoid';
 import jwt from 'jsonwebtoken';
 import path from 'path';
 import cookieParser from 'cookie-parser';
 import mongoose from 'mongoose';
-import { userModel } from './model.mjs';
+import { messageModel, userModel } from './model.mjs';
 import authApi from './api/auth.mjs';
 import messageApi from './api/message.mjs';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
+import cookie from 'cookie'
+
+// import {router} form './api/auth'
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5005;
 
-const server = createServer(app);
-const io = new Server(server, { cors: { origin: "http://localhost:5173", methods: ["*"], credentials: true } });
+// Debug environment variables
+console.log('Environment variables:');
+console.log('MONGODBURI:', process.env.MONGODBURI);
+console.log('SECRET_TOKEN:', process.env.SECRET_TOKEN);
+console.log('PORT:', process.env.PORT);
 
-mongoose.connect(process.env.MONGODBURI)
-  .then(() => console.log('Connected to MongoDB!'))
-  .catch((err) => console.log("MongoDB Connection Error:", err));
+const server = createServer(app);
+const io = new Server(server, { cors: { origin: "http://localhost:3000", credentials: true, methods: "*"} });
+
+// MongoDB Connection with better error handling
+const connectDB = async () => {
+    try {
+        await mongoose.connect(process.env.MONGODBURI);
+        console.log('✅ Connected to MongoDB!');
+    } catch (err) {
+        console.log("❌ MongoDB Connection Error:", err.message);
+        console.log("💡 Try using a local MongoDB instance or check your connection string");
+        // Don't exit the process, let the server continue
+    }
+};
+
+connectDB();
 
 const SECRET = process.env.SECRET_TOKEN;
 
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: ['http://localhost:3000'],
     credentials: true
 }));
+
 app.use(express.json());
 app.use(cookieParser());
 
-// Unprotected Routes
-app.use('/api/v1', authApi);
+app.use('/api/v1', authApi)
 
-// Authentication Middleware
-const authMiddleware = (req, res, next) => {
-    const token = req.cookies.Token;
-    console.log('Token received:', token);
-
-    if (!token) {
-        console.log('No token provided');
-        return res.status(401).send({ message: "Unauthorized: No token provided" });
+app.use('/api/v1/*splat' , (req, res, next) => {
+    if (!req?.cookies?.Token) {
+        res.status(401).send({
+            message: "Unauthorized"
+        })
+        return;
     }
 
-    jwt.verify(token, SECRET, (err, decodedData) => {
-        if (err) {
-            console.log('Token verification error:', err.message);
-            res.cookie('Token', '', { maxAge: 1, httpOnly: true });
-            return res.status(401).send({ message: "Invalid or expired token" });
+    jwt.verify(req.cookies.Token, SECRET, (err, decodedData) => {
+        if (!err) {
+
+            const nowDate = new Date().getTime() / 1000;
+
+            if (decodedData.exp < nowDate) {
+
+                res.status(401);
+                res.cookie('Token', '', {
+                    maxAge: 1,
+                    httpOnly: true,
+                    // sameSite: "none",
+                    secure: true
+                });
+                res.send({ message: "token expired" })
+
+            } else {
+
+                console.log("token approved");
+                req.body = {
+                    ...req.body,
+                    token: decodedData
+                }
+                next();
+            }
+        } else {
+            res.status(401).send({message: "invalid token"})
         }
-        console.log('Decoded token:', decodedData);
-        req.body.token = decodedData;
-        next();
     });
-};
+});
 
-// Protected Routes
-const protectedRouter = express.Router();
+app.get('/api/v1/profile', async(req , res) => {
 
-protectedRouter.get('/profile', async (req, res) => {
-    let queryUserId = req.query.user_id || req.body.token.id;
+    let queryUserId;
+
+    if(req.query.user_id){
+
+        queryUserId = req.query.user_id
+
+    }else{
+
+        queryUserId = req.body.token.id
+
+    }
 
     try {
-        let user = await userModel.findById(queryUserId, { password: 0 });
-        if (!user) {
-            return res.status(404).send({ message: "User not found" });
+        let user = await userModel.findById(queryUserId, {password: 0});
+        res.send({message: "User Found" , user: {
+            user_id: user._id,
+            first_name: user.firstName,
+            last_name: user.lastName,
+            email: user.email
+        }})
+    } catch (error) {
+        console.log("Error", error)
+        res.status(500).send({message: "Internal Server Error"})
+    }
+})
+
+app.get('/api/v1/users', async(req, res) => {
+    const userName = req.query.user
+    try {
+        let result
+        if(userName){
+           result = await userModel.find({$text: {$search: userName}}, {password: 0})
+        }else{
+            result = await userModel.find({}, {password: 0})
         }
-        res.send({
-            message: "User Found",
-            user: {
-                user_id: user._id,
-                first_name: user.firstName,
-                last_name: user.lastName,
-                email: user.email
+        console.log("Result", result);
+        res.status(200).send({message: "users found", users: result})
+    } catch (error) {
+        console.log("Error", error)
+        res.status(500).send({message: "Internal Server Error"})
+    }
+})
+
+app.use('/api/v1', messageApi(io))
+
+io.on('connection', (socket) => {
+    // console.log('a user connected', socket.id);
+    console.log(socket?.handshake?.headers?.cookie);
+    let userCookie;
+    if(socket?.handshake?.headers?.cookie){
+        userCookie = cookie.parse(socket?.handshake?.headers?.cookie);
+        console.log(userCookie);
+    
+        if (!userCookie?.Token) {
+            socket.disconnect();
+        }
+    
+        jwt.verify(userCookie.Token, SECRET, (err, decodedData) => {
+            if (!err) {
+                const nowDate = new Date().getTime() / 1000;
+    
+                if (decodedData.exp < nowDate) {
+                    socket.disconnect()
+                } else {
+    
+                }
+            } else {
+                socket.disconnect()
             }
         });
-    } catch (error) {
-        console.log("Error in /profile:", error);
-        res.status(500).send({ message: "Internal Server Error" });
     }
-});
 
-protectedRouter.get('/users', async (req, res) => {
-    try {
-        const currentUserId = req.body.token?.id;
-        if (!currentUserId) {
-            console.log('No currentUserId found in token');
-            return res.status(401).send({ message: "Unauthorized: Invalid token data" });
-        }
-        console.log('Current User ID:', currentUserId);
-        let result = await userModel.find({ _id: { $ne: currentUserId } }, { password: 0 });
-        console.log('Users found:', result);
-        res.status(200).send({ message: "users found", users: result });
-    } catch (error) {
-        console.log("Error", error);
-        res.status(500).send({ message: "Internal Server Error", error: error.message });
-    }
-});
-
-protectedRouter.use('/', messageApi(io));
-
-app.use('/api/v1', authMiddleware, protectedRouter);
-
-// Socket.IO Connection
-io.on('connection', (socket) => {
-    console.log('A user connected:', socket.id);
     socket.on("disconnect", (reason) => {
         console.log("Client disconnected:", socket.id, "Reason:", reason);
     });
+
 });
 
-// Frontend Serving
-const __dirname = path.resolve();
-app.use('/', express.static(path.join(__dirname, './frontend/dist')));
-app.use("/*splat", express.static(path.join(__dirname, './frontend/dist')));
+// setInterval(() => {
 
-// Server Listening
+//     io.emit("Test topic", { event: "ADDED_ITEM", data: "some data" });
+//     // console.log("emiting data to all client");
+
+// }, 2000)
+
+const __dirname = path.resolve();//'D:\Shariq Siddiqui\saylani-batch12\react-with-server\6.complete-ecom'
+// const fileLocation = path.join(__dirname, './web/build')
+app.use('/', express.static(path.join(__dirname, './frontend/dist')))
+app.use("/*splat" , express.static(path.join(__dirname, './frontend/dist')))
+
 server.listen(PORT, () => {
-    console.log(`Server is Running on port ${PORT}`);
+    console.log("Server is Running")
+})
+
+mongoose.connection.on('connected', function () {//connected
+    console.log("Mongoose is connected");
 });
 
-// Mongoose Connection Events
-mongoose.connection.on('connected', () => console.log("Mongoose is connected"));
-mongoose.connection.on('disconnected', () => {
+mongoose.connection.on('disconnected', function () {//disconnected
     console.log("Mongoose is disconnected");
-    process.exit(1);
+    // Don't exit the process, let the server continue
 });
-mongoose.connection.on('error', (err) => {
+
+mongoose.connection.on('error', function (err) {//any error
     console.log('Mongoose connection error: ', err);
-    process.exit(1);
+    // Don't exit the process, let the server continue
 });
+
+// process.on('SIGINT', function () {/////this function will run jst before app is closing
+//     console.log("app is terminating");
+//     mongoose.connection.close(function () {
+//         console.log('Mongoose default connection closed');
+//         process.exit(0);
+//     });
+// });
