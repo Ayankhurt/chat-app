@@ -28,7 +28,7 @@ console.log('SECRET_TOKEN:', process.env.SECRET_TOKEN);
 console.log('PORT:', process.env.PORT);
 
 const server = createServer(app);
-const io = new Server(server, { cors: { origin: "http://localhost:3000", credentials: true, methods: "*"} });
+const io = new Server(server, { cors: { origin: "http://localhost:5005", credentials: true, methods: "*"} });
 
 // MongoDB Connection with better error handling
 const connectDB = async () => {
@@ -47,7 +47,7 @@ connectDB();
 const SECRET = process.env.SECRET_TOKEN;
 
 app.use(cors({
-    origin: ['http://localhost:3000'],
+    origin: ['http://localhost:5005'],
     credentials: true
 }));
 
