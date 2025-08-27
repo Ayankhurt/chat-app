@@ -86,3 +86,48 @@
     transform: rotate(360deg);
   }
 }
+
+/* Chat bubble alignment for Chat.jsx */
+.chat-messages-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+}
+
+.chat-bubble {
+  max-width: 60%;
+  padding: 0.75rem 1rem;
+  border-radius: 1.25rem;
+  margin-bottom: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  word-break: break-word;
+}
+
+.chat-bubble-own {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+  color: #fff;
+  border-bottom-right-radius: 0.25rem;
+  border-bottom-left-radius: 1.25rem;
+}
+
+.chat-bubble-other {
+  align-self: flex-start;
+  background: #f3f4f6;
+  color: #222;
+  border-bottom-left-radius: 0.25rem;
+  border-bottom-right-radius: 1.25rem;
+}
+
+.chat-message-text {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.chat-message-time {
+  font-size: 0.75rem;
+  color: #888;
+  align-self: flex-end;
+}

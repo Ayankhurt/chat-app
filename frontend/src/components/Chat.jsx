@@ -134,7 +134,24 @@ function Chat() {
 
             <div className="chat-messages-container">
                 {messages.map((msg, index) => {
-                    const isOwnMessage = msg.from === state.user.user_id;
+                    // Debug information
+                    console.log('=== Message Debug ===');
+                    console.log('Message object:', msg);
+                    console.log('User state:', state.user);
+                    console.log('msg.from:', msg.from);
+                    console.log('state.user._id:', state.user._id);
+                    console.log('state.user.user_id:', state.user.user_id);
+                    
+                    // Handle different user ID formats
+                    const currentUserId = state.user._id || state.user.user_id;
+                    const messageFromId = msg.from?._id || msg.from;
+                    const isOwnMessage = messageFromId === currentUserId;
+                    
+                    console.log('currentUserId:', currentUserId);
+                    console.log('messageFromId:', messageFromId);
+                    console.log('isOwnMessage:', isOwnMessage);
+                    console.log('==================');
+                    
                     return (
                         <div key={index} className={`chat-bubble ${isOwnMessage ? 'chat-bubble-own' : 'chat-bubble-other'}`}>
                             <div className="chat-message-text">{msg.text}</div>

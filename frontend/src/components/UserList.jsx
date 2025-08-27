@@ -8,12 +8,17 @@ function UserList() {
     const [filteredUsers, setFilteredUsers] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
+    const [pagination, setPagination] = useState(null);
+    const [page, setPage] = useState(1);
+    const [allUsers, setAllUsers] = useState(true);
+    const limit = 8;
     const navigate = useNavigate();
 
     useEffect(() => {
         const fetchUsers = async () => {
+            setIsLoading(true);
             try {
-                const response = await fetch(`${state.baseUrl}/users`, {
+                const response = await fetch(`${state.baseUrl}/users?page=${page}&limit=${limit}`, {
                     method: 'GET',
                     credentials: 'include'
                 });
@@ -26,6 +31,8 @@ function UserList() {
                 if (data.message === 'users found') {
                     setUsers(data.users);
                     setFilteredUsers(data.users);
+                    setAllUsers(data.allUsers !== false); // default true if undefined
+                    setPagination(data.pagination || null);
                 }
             } catch (err) {
                 console.error('Error fetching users:', err);
@@ -34,7 +41,7 @@ function UserList() {
             }
         };
         fetchUsers();
-    }, [state.baseUrl, dispatch, navigate]);
+    }, [state.baseUrl, dispatch, navigate, page]);
 
     useEffect(() => {
         const filtered = users.filter(user =>
@@ -45,7 +52,17 @@ function UserList() {
     }, [searchTerm, users]);
 
     const handleLogout = async () => {
-        // ... (logout logic remains same)
+        try {
+            await fetch(`${state.baseUrl}/logout`, {
+                method: 'GET',
+                credentials: 'include',
+            });
+        } catch (err) {
+            // Optionally handle error
+        } finally {
+            dispatch({ type: 'USER_LOGOUT' });
+            navigate('/login');
+        }
     };
 
     const getInitials = (firstName, lastName) => {
@@ -86,7 +103,6 @@ function UserList() {
                         className="user-list-search"
                     />
                 </div>
-                
                 {filteredUsers.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {filteredUsers.map(user => (
@@ -109,6 +125,28 @@ function UserList() {
                         <p style={{color: '#6b7280', marginTop: '0.5rem'}}>
                             {searchTerm ? 'Your search returned no results. Try different keywords.' : 'There are no users to display.'}
                         </p>
+                    </div>
+                )}
+                {/* Pagination Controls */}
+                {!allUsers && pagination && (
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '2rem', gap: '1rem' }}>
+                        <button
+                            onClick={() => setPage(page - 1)}
+                            disabled={page <= 1}
+                            className="primary-btn"
+                        >
+                            Prev
+                        </button>
+                        <span>
+                            Page {pagination.page} of {pagination.totalPages}
+                        </span>
+                        <button
+                            onClick={() => setPage(page + 1)}
+                            disabled={page >= pagination.totalPages}
+                            className="primary-btn"
+                        >
+                            Next
+                        </button>
                     </div>
                 )}
             </main>

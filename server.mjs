@@ -123,22 +123,45 @@ app.get('/api/v1/profile', async(req , res) => {
     }
 })
 
-app.get('/api/v1/users', async(req, res) => {
-    const userName = req.query.user
+app.get('/api/v1/users', async (req, res) => {
+    const userName = req.query.user;
+    const page = Number(req.query.page) > 0 ? Number(req.query.page) : 1;
+    const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : 10;
+    const skip = (page - 1) * limit;
+
     try {
-        let result
-        if(userName){
-           result = await userModel.find({$text: {$search: userName}}, {password: 0})
-        }else{
-            result = await userModel.find({}, {password: 0})
+        let query = {};
+        if (userName) {
+            query = { $text: { $search: userName } };
         }
-        console.log("Result", result);
-        res.status(200).send({message: "users found", users: result})
+        const total = await userModel.countDocuments(query);
+        if (total <= 8) {
+            const users = await userModel.find(query, { password: 0 });
+            return res.status(200).send({
+                message: "users found",
+                users,
+                total,
+                allUsers: true
+            });
+        } else {
+            const users = await userModel.find(query, { password: 0 }).skip(skip).limit(limit);
+            return res.status(200).send({
+                message: "users found",
+                users,
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(total / limit)
+                },
+                allUsers: false
+            });
+        }
     } catch (error) {
-        console.log("Error", error)
-        res.status(500).send({message: "Internal Server Error"})
+        console.log("Error", error);
+        res.status(500).send({ message: "Internal Server Error" });
     }
-})
+});
 
 app.use('/api/v1', messageApi(io))
 
