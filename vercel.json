@@ -1,24 +1,16 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
+    "version": 2,
+    "builds": [
+     {
+      "src": "server.mjs",
+      "use": "@vercel/node",
+      "config": { "includeFiles": ["dist/**"] }
+     }
+    ],
+    "routes": [
+     {
       "src": "/(.*)",
-      "dest": "/frontend/dist/index.html"
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/frontend/dist/index.html"
-    }
-  ]
+      "dest": "server.mjs"
+     }
+    ]
 }
