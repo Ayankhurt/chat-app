@@ -4,6 +4,7 @@ import cors from 'cors';
 import { customAlphabet } from 'nanoid';
 import jwt from 'jsonwebtoken';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import cookieParser from 'cookie-parser';
 import mongoose from 'mongoose';
 import { messageModel, userModel } from './model.mjs';
@@ -28,7 +29,7 @@ console.log('SECRET_TOKEN:', process.env.SECRET_TOKEN);
 console.log('PORT:', process.env.PORT);
 
 const server = createServer(app);
-const io = new Server(server, { cors: { origin: "http://localhost:5005", credentials: true, methods: "*"} });
+const io = new Server(server, { cors: { origin: "*", credentials: true, methods: "*"} });
 
 // MongoDB Connection with better error handling
 const connectDB = async () => {
@@ -47,7 +48,7 @@ connectDB();
 const SECRET = process.env.SECRET_TOKEN;
 
 app.use(cors({
-    origin: ['http://localhost:5005'],
+    origin: ['http://localhost:3000', 'http://localhost:5005', 'https://your-vercel-domain.vercel.app'],
     credentials: true
 }));
 
@@ -56,7 +57,8 @@ app.use(cookieParser());
 
 app.use('/api/v1', authApi)
 
-app.use('/api/v1/*splat' , (req, res, next) => {
+// Authentication middleware for protected routes
+const authMiddleware = (req, res, next) => {
     if (!req?.cookies?.Token) {
         res.status(401).send({
             message: "Unauthorized"
@@ -93,9 +95,9 @@ app.use('/api/v1/*splat' , (req, res, next) => {
             res.status(401).send({message: "invalid token"})
         }
     });
-});
+};
 
-app.get('/api/v1/profile', async(req , res) => {
+app.get('/api/v1/profile', authMiddleware, async(req , res) => {
 
     let queryUserId;
 
@@ -123,7 +125,7 @@ app.get('/api/v1/profile', async(req , res) => {
     }
 })
 
-app.get('/api/v1/users', async (req, res) => {
+app.get('/api/v1/users', authMiddleware, async (req, res) => {
     const userName = req.query.user;
     const page = Number(req.query.page) > 0 ? Number(req.query.page) : 1;
     const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : 10;
@@ -205,13 +207,34 @@ io.on('connection', (socket) => {
 
 // }, 2000)
 
-const __dirname = path.resolve();//'D:\Shariq Siddiqui\saylani-batch12\react-with-server\6.complete-ecom'
-// const fileLocation = path.join(__dirname, './web/build')
-app.use('/', express.static(path.join(__dirname, './frontend/dist')))
-app.use("/*splat" , express.static(path.join(__dirname, './frontend/dist')))
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Serve static files from frontend/dist
+app.use(express.static(path.join(__dirname, "frontend/dist")));
+
+// Serve index.html for all non-API routes
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend/dist', 'index.html'));
+});
+
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend/dist', 'index.html'));
+});
+
+app.get('/signup', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend/dist', 'index.html'));
+});
+
+app.get('/users', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend/dist', 'index.html'));
+});
+
+app.get('/chat/:id', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend/dist', 'index.html'));
+});
 
 server.listen(PORT, () => {
-    console.log("Server is Running")
+    console.log("Server is Running on port:", PORT)
 })
 
 mongoose.connection.on('connected', function () {//connected
